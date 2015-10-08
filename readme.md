@@ -1,4 +1,4 @@
-I wrote this for myself because it saves me a LOT of hassle when I copy photos from my phone or camera to my main disk and
+I wrote this for myself because it will save me a LOT of hassle when I copy photos from my phone or camera to my main disk and
 then have to categorise them all.
 
 It's a java application that can be pointed to a directory containing image files and used to browse the pictures.  Photos
@@ -11,5 +11,7 @@ It also uses an alias-type system where the name of a directory only has to be p
 typing in "Simon's Leaving Do" will mean that it assigns "1=Simon's Leaving Do", meaning that the user just has to type "1"
 and the photo will be copied to this directory.
 
-This makes it extremely fast to use, especially with large numbers of photos, but obviously it's based on my particular way
+This will make it extremely fast to use, especially with large numbers of photos, but obviously it's based on my particular way
 of categorising them.
+
+Note that the above is in the future tense because although I've written it I haven't started testing it properly yet!
