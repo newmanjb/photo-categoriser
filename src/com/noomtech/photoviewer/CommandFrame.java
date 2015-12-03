@@ -5,8 +5,8 @@ import java.awt.*;
 import java.awt.event.KeyEvent;
 import java.awt.event.KeyListener;
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -21,15 +21,11 @@ public class CommandFrame extends JFrame {
 
 
     private static final String FILE_SEPARATOR = System.getProperty("file.separator");
-    private static final String NEWLINE = System.getProperty("line.separator");
     private static final String UNDERSCORE = "_";
-    private static final String UNKNOWN_YEAR = "UNKNOWN_YEAR";
-    private static final String TWENTY = "20";
-    private static final String[] MONTH_NAMES =
-            {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
-                    "November", "December"};
-    private PhotoPanel photoPanel;
-    private AliasPanel aliasPanel;
+    private static final String COMMA = ",";
+    private JFrame photoFrame;
+    private JFrame aliasFrame;
+    private JTextArea shell;
 
     private File[] photos;
     private int currentPhotoIndex = 0;
@@ -37,6 +33,7 @@ public class CommandFrame extends JFrame {
     private HashSet<String> aliasResolver = new HashSet<>();
     private String destinationDirectoryString;
     private int currentAliasNumber = 0;
+    private List<File> forDeletion = new ArrayList<File>();
 
 
     public static void main(String[] args) {
@@ -44,10 +41,19 @@ public class CommandFrame extends JFrame {
             throw new IllegalArgumentException("Please provide a destination directory!");
         }
 
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setVisible(true);
+        if(!new File(args[0]).exists()) {
+            throw new IllegalArgumentException("Destination directory of " + args[0] + " must exist!");
+        }
 
-        new CommandFrame(fileChooser.getSelectedFile().getAbsolutePath(), args[1]);
+//        JFileChooser fileChooser = new JFileChooser();
+//        fileChooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+//        fileChooser.showDialog(null, "Process Photos From Directory");
+
+        //¬File selectedFile = fileChooser.getSelectedFile();
+        File selectedFile = new File("C:/temp/photos");
+        if(selectedFile != null) {
+            new CommandFrame(selectedFile.getAbsolutePath(), args[0]);
+        }
     }
 
     public CommandFrame(String picturesDirectory, String destinationDirectory) {
@@ -55,32 +61,46 @@ public class CommandFrame extends JFrame {
         photos = new File(picturesDirectory).listFiles();
         if(photos.length > 0) {
 
-            getContentPane().setLayout(new GridBagLayout());
+            getContentPane().setLayout(new BorderLayout());
+
             Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
-            getContentPane().setPreferredSize(new Dimension(1300, 1000));
-            setLocation(new Point((int) ((screenSize.getWidth() - 1300) / 2), (int) ((screenSize.getHeight() - 1000) / 2)));
+            int heightUnit = screenSize.height / 50;
+            int widthUnit = screenSize.width / 50;
 
-            photoPanel = new PhotoPanel();
-            aliasPanel = new AliasPanel();
-            JTextArea shell = new JTextArea();
-            GridBagConstraints gbc = new GridBagConstraints(0,0,1,1,0,0,GridBagConstraints.CENTER,GridBagConstraints.BOTH,
-                    new Insets(0,0,0,0),0,0);
-            getContentPane().add(shell, gbc);
-            gbc.gridx++;
-            gbc.gridheight = 2;
-            getContentPane().add(photoPanel);
-            gbc.gridx = 0;
-            gbc.gridy = 1;
-            gbc.gridheight = 1;
-            getContentPane().add(aliasPanel, gbc);
-
-            photoPanel.setPhoto(getCurrentPhoto());
+            this.setMinimumSize(new Dimension(widthUnit * 50, heightUnit * 6));
+            this.setPreferredSize(new Dimension(widthUnit * 50, heightUnit * 6));
+            setLocation(new Point(0, 0));
+            //setLocation(new Point(0, (int) (screenSize.getHeight() - shellHeight)));
+            shell = new JTextArea();
+            JScrollPane scrollPane = new JScrollPane();
+            scrollPane.getViewport().add(shell);
+            getContentPane().add(scrollPane, BorderLayout.CENTER);
             shell.addKeyListener(new CommandListener(shell));
+            shell.setBorder(BorderFactory.createTitledBorder("Enter Command"));
+
+            photoFrame = new JFrame();
+            photoFrame.setMinimumSize(new Dimension(widthUnit * 50, heightUnit * 35));
+            photoFrame.setPreferredSize(new Dimension(widthUnit * 50, heightUnit * 35));
+            photoFrame.setLocation(new Point(0, heightUnit * 6));
+
+            aliasFrame = new AliasFrame(Collections.EMPTY_MAP);
+            aliasFrame.setMinimumSize(new Dimension(widthUnit * 50, heightUnit * 9));
+            aliasFrame.setPreferredSize(new Dimension(widthUnit * 50, heightUnit * 9));
+            aliasFrame.setLocation(0, heightUnit * 41);
+
+            aliasFrame.setVisible(true);
+            this.setVisible(true);
+            photoFrame.setVisible(true);
 
             destinationDirectoryString = destinationDirectory + FILE_SEPARATOR;
 
+            setTitle("f=forward,b=back,p=process,d=del,d'alias'=alias + del afterwards,q=quit,alias,month,year=create alias with month and year | alias=create alias");
             pack();
-            doLayout();
+
+            updatePhoto(getCurrentPhoto());
+
+            shell.requestFocus();
+            shell.setCaretPosition(0);
         }
         else {
             JOptionPane.showMessageDialog(this, "No photos in directory " + picturesDirectory, "Error", JOptionPane.ERROR_MESSAGE);
@@ -88,6 +108,33 @@ public class CommandFrame extends JFrame {
         }
     }
 
+    private void updatePhoto(File photo) {
+        Point location = photoFrame.getLocation();
+        Dimension size = photoFrame.getMinimumSize();
+
+        photoFrame.setVisible(false);
+        photoFrame.dispose();
+
+        ImageIcon photoIcon = null;
+        try {
+            photoIcon = new ImageIcon(photo.getAbsolutePath());
+        } catch (Exception e) {
+
+        }
+
+        photoFrame = new JFrame();
+        photoFrame.setLocation(location);
+        photoFrame.setMinimumSize(size);
+        if (photoIcon != null) {
+            photoFrame.add(new PhotoPanel(photoIcon.getImage()));
+        } else {
+            photoFrame.add(new JLabel("Could not display photo from file: " + photo.getAbsolutePath()));
+        }
+
+        pack();
+
+        photoFrame.setVisible(true);
+    }
 
     private class CommandListener implements KeyListener {
 
@@ -100,6 +147,14 @@ public class CommandFrame extends JFrame {
 
         @Override
         public void keyTyped(KeyEvent e) {
+        }
+
+        @Override
+        public void keyPressed(KeyEvent e) {
+        }
+
+        @Override
+        public void keyReleased(KeyEvent e) {
             if (e.getKeyChar() == KeyEvent.VK_ENTER) {
                 String command = newText.toString();
                 newText = new StringBuilder();
@@ -108,49 +163,52 @@ public class CommandFrame extends JFrame {
                 switch (command) {
                     case "f": {
                         //skip
-                        outputString = "Skipped";
+                        outputString = "Skipped " + getCurrentPhoto().getName();
                         moveToNextPhoto();
                         break;
                     }
                     case "b": {
                         //back
-                        outputString = "Moved Back";
+                        outputString = "Skipped " + getCurrentPhoto().getName();
                         moveToPreviousPhoto();
                         break;
                     }
                     case "d": {
                         //delete
-                        File toDelete = getCurrentPhoto();
-                        removeCurrentPhotoFromList();
-                        toDelete.delete();
-                        if(photos.length == 0) {
-                            int choice = JOptionPane.showConfirmDialog(getContentPane(), "No more photos left to categorise.  " +
-                                    "Would you like to save?");
-                            if(choice == JOptionPane.OK_OPTION) {
-                                finishUp();
-                            }
-                            else {
-                                System.exit(0);
-                            }
+                        forDeletion.add(getCurrentPhoto());
+                        boolean noMorePhotos = removeCurrentPhotoFromList();
+                        if(noMorePhotos) {
+                            saveOrQuit();
                         }
 
-                        outputString = "Deleted";
+                        outputString = "Marked " + getCurrentPhoto().getName() + " for deletion";
                         break;
                     }
                     case "q": {
                         //quit
+                        photoFrame.dispose();
+                        aliasFrame.dispose();
+                        dispose();
                         System.exit(0);
                     }
                     case "p": {
-                        finishUp();
+                        process();
+                        outputString = "Processed";
                         break;
                     }
                     default: {
 
+                        boolean deleteAfterwards = false;
+                        String aliasString = command;
+                        if(command.matches("d[0-9]")) {
+                            aliasString = command.substring(1, command.length());
+                            deleteAfterwards = true;
+                        }
+
                         File currentPhoto = getCurrentPhoto();
                         int alias = -1;
                         try {
-                            alias = Integer.parseInt(command);
+                            alias = Integer.parseInt(aliasString);
                         }
                         catch(NumberFormatException n) {}
 
@@ -161,33 +219,61 @@ public class CommandFrame extends JFrame {
                             }
                             else {
                                 fileList.add(currentPhoto);
-                                removeCurrentPhotoFromList();
+                                boolean noMorePhotos = removeCurrentPhotoFromList();
+                                if(deleteAfterwards) {
+                                    forDeletion.add(currentPhoto);
+                                    outputString = "Added " + getCurrentPhoto().getName() + " to alias " + command + " and marked it for deletion";
+                                }
+                                else {
+                                    outputString = "Added " + getCurrentPhoto().getName() + " to alias " + command;
+                                }
+
+                                if(noMorePhotos) {
+                                    saveOrQuit();
+                                }
                             }
                         }
-                        else if(!command.equals("") && !command.contains("/n") && !command.contains("/t") && !command.startsWith(" ")) {
-                            if(command.endsWith(" ")) {
-                                while(command.endsWith(" ")) {
+                        else if(command.contains(COMMA) && !command.equals("") && !command.contains("/n") && !command.contains("/t") && !command.startsWith(" ")) {
+                            if (command.endsWith(" ")) {
+                                while (command.endsWith(" ")) {
                                     command = command.substring(0, command.length() - 1);
                                 }
                             }
 
-                            if(aliasResolver.contains(command)) {
-                                outputString = command + " is already aliased";
+                            String[] components = command.split(COMMA);
+                            String newAliasString = null;
+                            if (components.length != 3) {
+                                outputString = "Invalid alias format.  Should be 'alias name','month','year'";
+                            } else {
+                                newAliasString = components[2] + UNDERSCORE + components[1] + UNDERSCORE + components[0];
                             }
-                            else {
-                                String[] monthAndYearOfCreation = getMonthAndYearOfCreation(currentPhoto);
-                                String dirName = destinationDirectoryString + monthAndYearOfCreation[0] + UNDERSCORE +
-                                        monthAndYearOfCreation[1] + UNDERSCORE + command;
-                                List<File> fileList = new ArrayList<>(1);
-                                fileList.add(new File(dirName));
-                                fileList.add(getCurrentPhoto());
-                                currentAliasNumber++;
 
-                                requestedFileStructure.put(currentAliasNumber, fileList);
-                                aliasResolver.add(command);
-                                aliasPanel.setAliases(requestedFileStructure);
+                            if (outputString == null) {
+                                if (aliasResolver.contains(newAliasString)) {
+                                    outputString = newAliasString + " is already aliased";
+                                } else {
+                                    String dirName = destinationDirectoryString + newAliasString;
+                                    List<File> fileList = new ArrayList<>(1);
+                                    fileList.add(new File(dirName));
+                                    fileList.add(getCurrentPhoto());
+                                    currentAliasNumber++;
 
-                                outputString = "Alias " + currentAliasNumber + "=" + command + " created and photo added";
+                                    requestedFileStructure.put(currentAliasNumber, fileList);
+                                    aliasResolver.add(newAliasString);
+
+                                    Point location = aliasFrame.getLocation();
+                                    Dimension size = aliasFrame.getPreferredSize();
+                                    aliasFrame.setVisible(false);
+                                    aliasFrame.dispose();
+                                    aliasFrame = new AliasFrame(requestedFileStructure);
+                                    aliasFrame.setMinimumSize(size);
+                                    aliasFrame.setPreferredSize(size);
+                                    aliasFrame.setLocation(location);
+                                    aliasFrame.pack();
+                                    aliasFrame.setVisible(true);
+
+                                    outputString = "Alias " + currentAliasNumber + "=" + newAliasString + " created";
+                                }
                             }
                         }
                         else {
@@ -196,50 +282,21 @@ public class CommandFrame extends JFrame {
                     }
                 }
 
-                if(outputString != null) {
-                    textArea.append(outputString + NEWLINE);
-                }
+                textArea.setText("");
+                textArea.setCaretPosition(0);
+                textArea.requestFocus();
+                shell.setBorder(BorderFactory.createTitledBorder(outputString));
 
-            } else {
+            }
+            else if(e.getKeyChar() == KeyEvent.VK_BACK_SPACE && newText.length() > 0) {
+                newText = new StringBuilder(newText.subSequence(0,newText.length() - 1));
+            }
+            else {
                 newText.append(e.getKeyChar());
             }
-        }
 
-        @Override
-        public void keyPressed(KeyEvent e) {
-        }
-
-        @Override
-        public void keyReleased(KeyEvent e) {
         }
     }
-
-    static String[] getMonthAndYearOfCreation(File file) {
-        try {
-            BasicFileAttributes b = Files.readAttributes(Paths.get(file.getAbsolutePath()), BasicFileAttributes.class);
-            Calendar calendar = Calendar.getInstance();
-            calendar.setTimeInMillis(b.creationTime().toMillis());
-            String creationMonth = theMonthName(calendar.MONTH);
-            String creationYear = Integer.toString(calendar.YEAR);
-            if(creationYear.startsWith(TWENTY)) {
-                creationYear = UNKNOWN_YEAR;
-            }
-            return new String[]{creationMonth, creationYear};
-        }
-        catch(IOException e) {
-            JOptionPane.showMessageDialog(null, "Could not get creation date for photo " + e.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            System.exit(1);
-        }
-
-        return null;
-    }
-
-    private static String theMonthName(int month) {
-        return MONTH_NAMES[month];
-    }
-
-
 
 //    public static void main(String[] args) throws InterruptedException {
 //        PhotoPanel p = new PhotoPanel("C:/temp/leaves.png");
@@ -247,29 +304,41 @@ public class CommandFrame extends JFrame {
 //        p.setPhoto("C:/temp/sky.png");
 //    }
 
-    private void finishUp() {
+    private void process() {
 
-        if(requestedFileStructure.isEmpty()) {
+        if(requestedFileStructure.isEmpty() && forDeletion.isEmpty() && photos.length > 0) {
             JOptionPane.showMessageDialog(getContentPane(), "Nothing to process.  Please categorise some photos", "",
                     JOptionPane.WARNING_MESSAGE);
-            System.exit(0);
         }
         else {
             for (Map.Entry<Integer, List<File>> entry : requestedFileStructure.entrySet()) {
                 List<File> fileList = entry.getValue();
                 File destinationDirectory = fileList.get(0);
                 if (!destinationDirectory.exists()) {
-                    createIfNotExist(destinationDirectory);
+                    destinationDirectory.mkdir();
                 }
 
                 try {
                     for (int i = 1; i < fileList.size(); i++) {
                         File sourceFile = fileList.get(i);
-                        copyFile(sourceFile, new File(destinationDirectoryString + sourceFile.getName()));
-                    }
+                        copyFile(sourceFile, new File(destinationDirectory.getAbsolutePath() + File.separator + sourceFile.getName()));
+                }
                 } catch (IOException e) {
                     String message = "Could not copy files to destination: " + e.getMessage();
                     JOptionPane.showMessageDialog(getContentPane(), message, "Error", JOptionPane.ERROR_MESSAGE);
+                    System.exit(1);
+                }
+            }
+
+            for(File toDelete : forDeletion) {
+                try {
+                    if(!toDelete.delete()) {
+                        throw new IllegalStateException("Could not delete file " + toDelete.getAbsolutePath());
+                    }
+                }
+                catch(Exception e) {
+                    JOptionPane.showMessageDialog(null, "Could not delete file " + toDelete.getAbsolutePath() + ": " + e.getMessage(),
+                            "Error", JOptionPane.ERROR_MESSAGE);
                     System.exit(1);
                 }
             }
@@ -277,34 +346,19 @@ public class CommandFrame extends JFrame {
     }
 
     private void copyFile(File src, File dest) throws IOException {
-        try(FileReader reader = new FileReader(src); FileWriter writer = new FileWriter(dest)) {
+        try(FileInputStream reader = new FileInputStream(src);
+            FileOutputStream writer = new FileOutputStream(dest)) {
+
             int i;
-            while((i = reader.read()) != -1) {
-                writer.write(i);
+            byte[] b = new byte[1024];
+            while((i = reader.read(b)) != -1) {
+                writer.write(b,0,i);
             }
         }
     }
 
-    private void createIfNotExist(File childFileThatDoesNotExist) {
-        File parent = childFileThatDoesNotExist.getParentFile();
-        if(!parent.exists()) {
-            createIfNotExist(parent);
-        }
-
-        try {
-            childFileThatDoesNotExist.createNewFile();
-        }
-        catch(IOException e) {
-            JOptionPane.showMessageDialog(getContentPane(), "Could not create file : " +
-                    childFileThatDoesNotExist.getAbsolutePath(), "Error", JOptionPane.ERROR_MESSAGE);
-            System.exit(1);
-        }
-    }
-
     private void setDisplayedPhoto(final File file) {
-        photoPanel.setPhoto(file);
-        String[] creationTimeInfo = getMonthAndYearOfCreation(file);
-        setTitle(creationTimeInfo[0] + " " + creationTimeInfo[1]);
+        updatePhoto(file);
     }
 
     private void moveToNextPhoto() {
@@ -333,26 +387,39 @@ public class CommandFrame extends JFrame {
         return photos[currentPhotoIndex];
     }
 
-    private void removeCurrentPhotoFromList() {
+    private boolean removeCurrentPhotoFromList() {
+        if(photos.length == 1) {
+            return true;
+        }
+
         File[] newPhotos = new File[photos.length - 1];
         int indexInNewPhotos = 0;
         int indexInOldPhotos = 0;
         while(indexInNewPhotos < newPhotos.length) {
-            if(indexInOldPhotos == currentPhotoIndex) {
-                if(indexInOldPhotos == photos.length - 1) {
-                    indexInOldPhotos = 0;
-                }
-                else {
-                    indexInOldPhotos++;
-                }
+
+            if(indexInOldPhotos != currentPhotoIndex) {
+                newPhotos[indexInNewPhotos] = photos[indexInOldPhotos];
+                indexInNewPhotos++;
             }
 
-            newPhotos[indexInNewPhotos] = photos[indexInOldPhotos];
-            indexInNewPhotos++;
             indexInOldPhotos++;
         }
 
         photos = newPhotos;
+        if(currentPhotoIndex > (photos.length - 1)) {
+            currentPhotoIndex = 0;
+        }
         setDisplayedPhoto(getCurrentPhoto());
+        return false;
+    }
+
+    private void saveOrQuit() {
+        int choice = JOptionPane.showConfirmDialog(getContentPane(), "No more photos left to categorise.  " +
+                "Would you like to save?");
+        if (choice == JOptionPane.OK_OPTION) {
+            process();
+        }
+
+        System.exit(0);
     }
 }
